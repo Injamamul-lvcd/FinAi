@@ -32,7 +32,7 @@ class Settings(BaseSettings):
         description="Gemini embedding model name"
     )
     gemini_chat_model: str = Field(
-        default="gemini-1.5-flash",
+        default="models/gemini-2.0-flash",
         description="Gemini chat model name"
     )
     gemini_temperature: float = Field(
