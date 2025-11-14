@@ -15,6 +15,10 @@ from utils.exceptions import register_exception_handlers
 from api.routes import chat
 CHAT_AVAILABLE = True
 
+# Import auth routes
+from api.routes import auth
+AUTH_AVAILABLE = True
+
 # Initialize settings to get log level
 settings = get_settings()
 
@@ -57,6 +61,11 @@ register_exception_handlers(app)
 app.include_router(documents.router)
 app.include_router(health.router)
 
+# Register auth router if available
+if AUTH_AVAILABLE:
+    app.include_router(auth.router)
+    logger.info("Auth routes registered")
+
 # Register chat router if available
 if CHAT_AVAILABLE:
     app.include_router(chat.router)
@@ -78,6 +87,11 @@ async def startup_event():
         # Initialize document services
         documents.initialize_document_services()
         logger.info("Document services initialized")
+        
+        # Initialize auth services
+        if AUTH_AVAILABLE:
+            auth.initialize_auth_service()
+            logger.info("Auth services initialized")
         
         # Initialize chat services
         if CHAT_AVAILABLE:

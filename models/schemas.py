@@ -2,7 +2,7 @@
 Pydantic models for API requests and responses.
 """
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
 
 
@@ -177,5 +177,161 @@ class ErrorResponse(BaseModel):
                     "file_type": "xlsx",
                     "allowed_types": ["pdf", "docx", "txt"]
                 }
+            }
+        }
+
+
+# Authentication Schemas
+
+class UserRegister(BaseModel):
+    """Request model for user registration."""
+    username: str = Field(
+        ...,
+        min_length=3,
+        max_length=50,
+        description="Unique username"
+    )
+    email: EmailStr = Field(..., description="User email address")
+    password: str = Field(
+        ...,
+        min_length=8,
+        max_length=100,
+        description="User password (min 8 characters)"
+    )
+    full_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="User's full name"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "username": "john_doe",
+                "email": "john@example.com",
+                "password": "SecurePass123!",
+                "full_name": "John Doe"
+            }
+        }
+
+
+class UserLogin(BaseModel):
+    """Request model for user login."""
+    username: str = Field(..., description="Username")
+    password: str = Field(..., description="Password")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "username": "john_doe",
+                "password": "SecurePass123!"
+            }
+        }
+
+
+class Token(BaseModel):
+    """Response model for authentication token."""
+    access_token: str = Field(..., description="JWT access token")
+    token_type: str = Field(default="bearer", description="Token type")
+    user: "UserResponse" = Field(..., description="User information")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "token_type": "bearer",
+                "user": {
+                    "user_id": "507f1f77bcf86cd799439011",
+                    "username": "john_doe",
+                    "email": "john@example.com",
+                    "full_name": "John Doe",
+                    "is_active": True
+                }
+            }
+        }
+
+
+class UserResponse(BaseModel):
+    """Response model for user information."""
+    user_id: str = Field(..., description="Unique user identifier")
+    username: str = Field(..., description="Username")
+    email: str = Field(..., description="Email address")
+    full_name: Optional[str] = Field(None, description="Full name")
+    is_active: bool = Field(default=True, description="Account active status")
+    created_at: Optional[str] = Field(None, description="Account creation timestamp")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_id": "507f1f77bcf86cd799439011",
+                "username": "john_doe",
+                "email": "john@example.com",
+                "full_name": "John Doe",
+                "is_active": True,
+                "created_at": "2024-11-09T10:30:00"
+            }
+        }
+
+
+class PasswordChange(BaseModel):
+    """Request model for password change."""
+    old_password: str = Field(..., description="Current password")
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        max_length=100,
+        description="New password (min 8 characters)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "old_password": "OldPass123!",
+                "new_password": "NewSecurePass456!"
+            }
+        }
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request model for forgot password."""
+    email: EmailStr = Field(..., description="User's email address")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "john@example.com"
+            }
+        }
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request model for password reset."""
+    token: str = Field(..., description="Password reset token")
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        max_length=100,
+        description="New password (min 8 characters)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "new_password": "NewSecurePass456!"
+            }
+        }
+
+
+class ForgotPasswordResponse(BaseModel):
+    """Response model for forgot password."""
+    message: str = Field(..., description="Success message")
+    reset_token: Optional[str] = Field(None, description="Reset token (for development/testing only)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "If the email exists, a password reset link has been sent.",
+                "reset_token": None
             }
         }

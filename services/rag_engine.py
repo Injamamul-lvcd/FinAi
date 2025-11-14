@@ -8,6 +8,7 @@ and response generation using Google Gemini LLM.
 
 import logging
 from typing import List, Dict, Optional, Any
+from functools import lru_cache
 import google.generativeai as genai
 from services.vector_store import VectorStoreManager
 from services.session_manager import SessionManager
@@ -32,7 +33,8 @@ class RAGQueryEngine:
         chat_model_name: str = "gemini-1.5-flash",
         temperature: float = 0.7,
         max_tokens: int = 500,
-        top_k: int = 5
+        top_k: int = 5,
+        similarity_threshold: float = 0.7
     ):
         """
         Initialize the RAG Query Engine.
@@ -46,12 +48,14 @@ class RAGQueryEngine:
             temperature: Temperature for LLM generation (0.0-2.0)
             max_tokens: Maximum tokens for LLM response
             top_k: Number of chunks to retrieve for context
+            similarity_threshold: Minimum similarity score (0.0-1.0) to include results
         """
         self.vector_store = vector_store
         self.session_manager = session_manager
         self.top_k = top_k
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.similarity_threshold = similarity_threshold
         
         # Configure Google Gemini API
         genai.configure(api_key=google_api_key)
@@ -62,9 +66,14 @@ class RAGQueryEngine:
         # Initialize chat model
         self.chat_model = genai.GenerativeModel(chat_model_name)
         
+        # Cache for vector store stats to avoid repeated checks
+        self._vector_store_empty_cache = None
+        self._cache_timestamp = None
+        
         logger.info(
             f"RAGQueryEngine initialized with chat_model={chat_model_name}, "
-            f"embedding_model={embedding_model_name}, top_k={top_k}"
+            f"embedding_model={embedding_model_name}, top_k={top_k}, "
+            f"similarity_threshold={similarity_threshold}"
         )
     
     def _generate_embedding(self, text: str) -> List[float]:
@@ -91,6 +100,35 @@ class RAGQueryEngine:
             logger.error(f"Failed to generate embedding: {e}")
             raise
 
+    def _is_vector_store_empty(self) -> bool:
+        """
+        Check if vector store has any documents.
+        Uses caching to avoid repeated database queries.
+        
+        Returns:
+            bool: True if vector store is empty
+        """
+        try:
+            from datetime import datetime, timedelta
+            
+            # Cache for 30 seconds to avoid repeated checks
+            if (self._vector_store_empty_cache is not None and 
+                self._cache_timestamp is not None and
+                datetime.now() - self._cache_timestamp < timedelta(seconds=30)):
+                return self._vector_store_empty_cache
+            
+            stats = self.vector_store.get_stats()
+            is_empty = stats.get('total_chunks', 0) == 0
+            
+            # Update cache
+            self._vector_store_empty_cache = is_empty
+            self._cache_timestamp = datetime.now()
+            
+            return is_empty
+        except Exception as e:
+            logger.warning(f"Failed to check vector store status: {e}")
+            return False
+
     def retrieve_context(self, query: str) -> List[Dict[str, Any]]:
         """
         Retrieve top K relevant chunks from vector store based on query.
@@ -109,6 +147,11 @@ class RAGQueryEngine:
             Exception: If retrieval fails
         """
         try:
+            # Quick check: if vector store is empty, skip embedding generation
+            if self._is_vector_store_empty():
+                logger.info("Vector store is empty, skipping retrieval")
+                return []
+            
             # Generate embedding for the query
             query_embedding = self._generate_embedding(query)
             
@@ -118,12 +161,26 @@ class RAGQueryEngine:
                 top_k=self.top_k
             )
             
-            logger.info(f"Retrieved {len(results)} chunks for query")
-            return results
+            # Filter results by similarity threshold
+            # Lower distance = higher similarity
+            filtered_results = [
+                r for r in results 
+                if r.get('distance', 1.0) <= (1.0 - self.similarity_threshold)
+            ]
+            
+            if len(filtered_results) < len(results):
+                logger.info(
+                    f"Filtered {len(results) - len(filtered_results)} low-quality results. "
+                    f"Keeping {len(filtered_results)} results above threshold."
+                )
+            
+            logger.info(f"Retrieved {len(filtered_results)} relevant chunks for query")
+            return filtered_results
             
         except Exception as e:
             logger.error(f"Context retrieval failed: {e}")
-            raise
+            # Return empty list instead of raising to allow graceful fallback
+            return []
     
     def construct_prompt(
         self,
@@ -185,10 +242,67 @@ Please provide a helpful answer based on the context above."""
         
         return prompt
     
+    def _handle_no_context_query(self, query: str) -> str:
+        """
+        Handle queries when no document context is available.
+        Combines classification and response generation in a single LLM call for efficiency.
+        
+        Args:
+            query: User query text
+            
+        Returns:
+            str: Generated response (either finance answer or redirect message)
+        """
+        try:
+            combined_prompt = f"""You are a financial assistant. Analyze the following question and respond accordingly:
+
+1. First, determine if the question is related to finance, accounting, economics, investments, banking, or financial topics.
+2. If it IS finance-related: Provide a helpful, accurate answer using your general knowledge. Keep it concise and professional. If specific data would help, mention that uploading documents would provide more accurate answers.
+3. If it is NOT finance-related: Politely explain that you only handle finance-related questions and ask the user to ask about finance topics.
+
+Question: {query}
+
+Your response:"""
+
+            response = self.chat_model.generate_content(
+                combined_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=self.temperature,
+                    max_output_tokens=self.max_tokens
+                )
+            )
+            
+            response_text = response.text.strip()
+            
+            # Check if response indicates non-finance topic (heuristic)
+            # If the response mentions "only handle finance" or similar, it's likely a redirect
+            lower_response = response_text.lower()
+            is_redirect = any(phrase in lower_response for phrase in [
+                "only handle finance", "finance-related", "specialized in finance",
+                "can't help with", "outside my expertise"
+            ])
+            
+            if is_redirect:
+                logger.info("Non-finance question detected via combined prompt")
+            else:
+                logger.info("Finance question answered via combined prompt")
+            
+            return response_text
+            
+        except Exception as e:
+            logger.error(f"Failed to handle no-context query: {e}")
+            return (
+                "I'm a financial assistant specialized in finance-related topics. "
+                "I can only answer questions related to finance, accounting, investments, "
+                "economics, banking, and other financial matters. Please ask me a question "
+                "related to finance, or upload financial documents for more specific assistance."
+            )
+
     def query(
         self,
         user_query: str,
         session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
         max_retries: int = 2
     ) -> Dict[str, Any]:
         """
@@ -197,6 +311,7 @@ Please provide a helpful answer based on the context above."""
         Args:
             user_query: The user's question
             session_id: Optional session ID for conversation continuity
+            user_id: Optional user ID to associate with the session
             max_retries: Maximum number of retry attempts for LLM failures
             
         Returns:
@@ -208,15 +323,15 @@ Please provide a helpful answer based on the context above."""
         Raises:
             Exception: If query processing fails after retries
         """
-        logger.info(f"Processing query with session_id={session_id}")
+        logger.info(f"Processing query with session_id={session_id}, user_id={user_id}")
         
         # Create or validate session
         if session_id is None:
-            session_id = self.session_manager.create_session()
+            session_id = self.session_manager.create_session(user_id=user_id)
             logger.info(f"Created new session: {session_id}")
         elif not self.session_manager.session_exists(session_id):
             logger.warning(f"Session {session_id} not found, creating new session")
-            session_id = self.session_manager.create_session()
+            session_id = self.session_manager.create_session(user_id=user_id)
         
         try:
             # Step 1: Retrieve relevant context
@@ -228,11 +343,10 @@ Please provide a helpful answer based on the context above."""
             # Step 3: Check if we have sufficient context
             if not context_chunks:
                 logger.warning("No relevant context found for query")
-                fallback_response = (
-                    "I apologize, but I don't have enough information in the available "
-                    "financial documents to answer your question. Please try rephrasing "
-                    "your question or upload relevant documents."
-                )
+                
+                # Handle query without context using combined classification + response
+                # This is more efficient than separate calls
+                fallback_response = self._handle_no_context_query(user_query)
                 
                 # Store the interaction
                 self.session_manager.add_message(session_id, 'user', user_query)

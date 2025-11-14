@@ -32,7 +32,7 @@ class Settings(BaseSettings):
         description="Gemini embedding model name"
     )
     gemini_chat_model: str = Field(
-        default="models/gemini-2.0-flash",
+        default="models/gemini-2.5-flash",
         description="Gemini chat model name"
     )
     gemini_temperature: float = Field(
@@ -95,7 +95,33 @@ class Settings(BaseSettings):
     # Session Storage Configuration (Optional with defaults)
     session_db_path: str = Field(
         default="./data/sessions.db",
-        description="Path to SQLite database for session storage"
+        description="Path to SQLite database for session storage (deprecated, use MongoDB)"
+    )
+    
+    # MongoDB Configuration (Optional with defaults)
+    mongodb_connection_string: str = Field(
+        default="mongodb://localhost:27017/",
+        description="MongoDB connection string"
+    )
+    mongodb_database_name: str = Field(
+        default="financial_chatbot",
+        description="MongoDB database name"
+    )
+    
+    # JWT Authentication Configuration (Optional with defaults)
+    jwt_secret_key: str = Field(
+        default="your-secret-key-change-in-production-please-use-strong-random-key",
+        description="Secret key for JWT token encoding/decoding"
+    )
+    jwt_algorithm: str = Field(
+        default="HS256",
+        description="JWT algorithm"
+    )
+    jwt_access_token_expire_minutes: int = Field(
+        default=30,
+        ge=1,
+        le=1440,
+        description="JWT access token expiration time in minutes"
     )
     
     # API Configuration (Optional with defaults)

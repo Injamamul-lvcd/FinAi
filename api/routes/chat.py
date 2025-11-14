@@ -5,7 +5,7 @@ This module provides the chat endpoint that processes user queries
 using the RAG pipeline and returns context-aware responses.
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import logging
@@ -13,9 +13,9 @@ import logging
 from models.schemas import ChatRequest, ChatResponse, Source
 from services.rag_engine import RAGQueryEngine
 from services.vector_store import VectorStoreManager
-from services.session_manager import SessionManager
+from services.mongodb_session_manager import MongoDBSessionManager
 from config.settings import get_settings
-# No custom exceptions needed - using standard HTTPException
+from api.routes.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +44,10 @@ def initialize_chat_services():
             collection_name=settings.chroma_collection_name
         )
         
-        # Initialize session manager
-        session_manager = SessionManager(
-            db_path=settings.session_db_path,
+        # Initialize MongoDB session manager
+        session_manager = MongoDBSessionManager(
+            connection_string=settings.mongodb_connection_string,
+            database_name=settings.mongodb_database_name,
             max_turns=settings.max_conversation_turns
         )
         
@@ -62,7 +63,7 @@ def initialize_chat_services():
             top_k=settings.top_k_chunks
         )
         
-        logger.info("Chat services initialized successfully")
+        logger.info("Chat services initialized successfully with MongoDB")
         
     except Exception as e:
         logger.error(f"Failed to initialize chat services: {e}")
@@ -74,14 +75,18 @@ def initialize_chat_services():
     response_model=ChatResponse,
     status_code=status.HTTP_200_OK,
     summary="Process a chat query",
-    description="Submit a financial question and receive a context-aware answer based on uploaded documents"
+    description="Submit a financial question and receive a context-aware answer based on uploaded documents (requires authentication)"
 )
-async def chat_query(request: ChatRequest) -> ChatResponse:
+async def chat_query(
+    request: ChatRequest,
+    current_user: dict = Depends(get_current_user)
+) -> ChatResponse:
     """
     Process a user query using RAG pipeline.
     
     Args:
         request: ChatRequest containing query and optional session_id
+        current_user: Current authenticated user (injected by dependency)
         
     Returns:
         ChatResponse with generated answer, sources, and session_id
@@ -97,12 +102,13 @@ async def chat_query(request: ChatRequest) -> ChatResponse:
         )
     
     try:
-        logger.info(f"Received chat query: '{request.query[:50]}...'")
+        logger.info(f"Received chat query from user {current_user['username']}: '{request.query[:50]}...'")
         
         # Process query through RAG pipeline
         result = rag_engine.query(
             user_query=request.query,
-            session_id=request.session_id
+            session_id=request.session_id,
+            user_id=current_user['user_id']
         )
         
         # Convert sources to response format
