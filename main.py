@@ -19,6 +19,10 @@ CHAT_AVAILABLE = True
 from api.routes import auth
 AUTH_AVAILABLE = True
 
+# Import admin routes
+from api.routes import admin
+ADMIN_AVAILABLE = True
+
 # Initialize settings to get log level
 settings = get_settings()
 
@@ -71,6 +75,11 @@ if CHAT_AVAILABLE:
     app.include_router(chat.router)
     logger.info("Chat routes registered")
 
+# Register admin router if available
+if ADMIN_AVAILABLE:
+    app.include_router(admin.router)
+    logger.info("Admin routes registered")
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -97,6 +106,11 @@ async def startup_event():
         if CHAT_AVAILABLE:
             chat.initialize_chat_services()
             logger.info("Chat services initialized")
+        
+        # Initialize admin services
+        if ADMIN_AVAILABLE:
+            admin.initialize_admin_services()
+            logger.info("Admin services initialized")
         
         logger.info("Application startup complete")
         

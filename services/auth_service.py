@@ -163,6 +163,8 @@ class AuthService:
                 "hashed_password": hashed_password,
                 "full_name": full_name,
                 "is_active": True,
+                "is_admin": False,
+                "password_reset_required": False,
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow()
             }
@@ -179,6 +181,8 @@ class AuthService:
                 "email": email,
                 "full_name": full_name,
                 "is_active": True,
+                "is_admin": False,
+                "password_reset_required": False,
                 "created_at": user_doc["created_at"].isoformat()
             }
             
@@ -237,7 +241,9 @@ class AuthService:
                 "username": user["username"],
                 "email": user["email"],
                 "full_name": user.get("full_name"),
-                "is_active": user.get("is_active", True)
+                "is_active": user.get("is_active", True),
+                "is_admin": user.get("is_admin", False),
+                "password_reset_required": user.get("password_reset_required", False)
             }
             
         except Exception as e:
@@ -266,6 +272,8 @@ class AuthService:
                 "email": user["email"],
                 "full_name": user.get("full_name"),
                 "is_active": user.get("is_active", True),
+                "is_admin": user.get("is_admin", False),
+                "password_reset_required": user.get("password_reset_required", False),
                 "created_at": user["created_at"].isoformat()
             }
             
@@ -552,6 +560,8 @@ class AuthService:
                 "email": user["email"],
                 "full_name": user.get("full_name"),
                 "is_active": user.get("is_active", True),
+                "is_admin": user.get("is_admin", False),
+                "password_reset_required": user.get("password_reset_required", False),
                 "created_at": user["created_at"].isoformat()
             }
             
