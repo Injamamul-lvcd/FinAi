@@ -124,6 +124,36 @@ class Settings(BaseSettings):
         description="JWT access token expiration time in minutes"
     )
     
+    # Admin Panel Configuration (Optional with defaults)
+    admin_token_expire_hours: int = Field(
+        default=8,
+        ge=1,
+        le=24,
+        description="Admin JWT token expiration time in hours"
+    )
+    admin_rate_limit_per_minute: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        description="Rate limit for admin endpoints per minute"
+    )
+    enable_admin_panel: bool = Field(
+        default=True,
+        description="Enable or disable admin panel endpoints"
+    )
+    activity_log_retention_days: int = Field(
+        default=365,
+        ge=1,
+        le=3650,
+        description="Number of days to retain activity logs"
+    )
+    analytics_cache_ttl_minutes: int = Field(
+        default=15,
+        ge=1,
+        le=1440,
+        description="Cache TTL for analytics data in minutes"
+    )
+    
     # API Configuration (Optional with defaults)
     api_host: str = Field(
         default="0.0.0.0",
@@ -138,6 +168,16 @@ class Settings(BaseSettings):
     log_level: str = Field(
         default="INFO",
         description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
+    )
+    
+    # CORS Configuration (Optional with defaults)
+    cors_origins: str = Field(
+        default="*",
+        description="Comma-separated list of allowed CORS origins for regular endpoints"
+    )
+    admin_cors_origins: str = Field(
+        default="*",
+        description="Comma-separated list of allowed CORS origins for admin endpoints (should be restricted in production)"
     )
     
     model_config = SettingsConfigDict(
@@ -190,6 +230,20 @@ class Settings(BaseSettings):
     def max_file_size_bytes(self) -> int:
         """Convert max file size from MB to bytes."""
         return self.max_file_size_mb * 1024 * 1024
+    
+    @property
+    def cors_origins_list(self) -> list:
+        """Parse CORS origins string into a list."""
+        if self.cors_origins == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+    
+    @property
+    def admin_cors_origins_list(self) -> list:
+        """Parse admin CORS origins string into a list."""
+        if self.admin_cors_origins == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.admin_cors_origins.split(",") if origin.strip()]
 
 
 # Global settings instance
