@@ -1,7 +1,7 @@
 """
 Pydantic models for API requests and responses.
 """
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
 
@@ -712,5 +712,542 @@ class DocumentDeleteResponse(BaseModel):
                 "document_id": "doc_123",
                 "filename": "financial_report_q4.pdf",
                 "chunks_deleted": 42
+            }
+        }
+
+
+# Admin System Monitoring Schemas
+
+class SystemHealthResponse(BaseModel):
+    """Response model for system health status."""
+    status: str = Field(..., description="Overall system status (healthy/degraded/unhealthy)")
+    vector_db_status: str = Field(..., description="ChromaDB connection status")
+    llm_api_status: str = Field(..., description="LLM API availability status")
+    session_db_status: str = Field(..., description="SQLite session database status")
+    mongodb_status: str = Field(..., description="MongoDB connection status")
+    timestamp: str = Field(..., description="Timestamp of health check")
+    error_details: Optional[Dict] = Field(None, description="Error details if any component is unhealthy")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status": "healthy",
+                "vector_db_status": "healthy",
+                "llm_api_status": "healthy",
+                "session_db_status": "healthy",
+                "mongodb_status": "healthy",
+                "timestamp": "2024-11-14T10:30:00Z",
+                "error_details": None
+            }
+        }
+
+
+class SystemMetricsResponse(BaseModel):
+    """Response model for system performance metrics."""
+    active_sessions: int = Field(..., ge=0, description="Number of active sessions")
+    total_requests_24h: int = Field(..., ge=0, description="Total API requests in last 24 hours")
+    avg_response_time_ms: float = Field(..., ge=0, description="Average response time in milliseconds")
+    memory_usage_percent: float = Field(..., ge=0, le=100, description="Memory usage percentage")
+    disk_usage_percent: float = Field(..., ge=0, le=100, description="Disk usage percentage")
+    uptime_hours: float = Field(..., ge=0, description="Application uptime in hours")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "active_sessions": 42,
+                "total_requests_24h": 1523,
+                "avg_response_time_ms": 245.67,
+                "memory_usage_percent": 45.2,
+                "disk_usage_percent": 62.8,
+                "uptime_hours": 72.5
+            }
+        }
+
+
+class StorageMetricsResponse(BaseModel):
+    """Response model for storage usage metrics."""
+    vector_db_size_mb: float = Field(..., ge=0, description="Vector database size in megabytes")
+    session_db_size_mb: float = Field(..., ge=0, description="Session database size in megabytes")
+    mongodb_size_mb: float = Field(..., ge=0, description="MongoDB size in megabytes")
+    total_document_size_mb: float = Field(..., ge=0, description="Total uploaded document size in megabytes")
+    available_disk_gb: float = Field(..., ge=0, description="Available disk space in gigabytes")
+    disk_usage_percent: float = Field(..., ge=0, le=100, description="Disk usage percentage")
+    growth_rate_7d_percent: float = Field(..., description="Storage growth rate over last 7 days")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "vector_db_size_mb": 512.45,
+                "session_db_size_mb": 24.67,
+                "mongodb_size_mb": 128.34,
+                "total_document_size_mb": 245.67,
+                "available_disk_gb": 45.2,
+                "disk_usage_percent": 62.8,
+                "growth_rate_7d_percent": 5.3
+            }
+        }
+
+
+class APIEndpointMetric(BaseModel):
+    """Model for API endpoint metrics."""
+    endpoint: str = Field(..., description="API endpoint path")
+    total_requests: int = Field(..., ge=0, description="Total number of requests")
+    success_count: int = Field(..., ge=0, description="Number of successful requests (2xx)")
+    error_count: int = Field(..., ge=0, description="Number of failed requests (4xx, 5xx)")
+    avg_response_time_ms: float = Field(..., ge=0, description="Average response time in milliseconds")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "endpoint": "/api/v1/chat",
+                "total_requests": 523,
+                "success_count": 498,
+                "error_count": 25,
+                "avg_response_time_ms": 245.67
+            }
+        }
+
+
+class SlowestRequest(BaseModel):
+    """Model for slowest API requests."""
+    endpoint: str = Field(..., description="API endpoint path")
+    response_time_ms: float = Field(..., ge=0, description="Response time in milliseconds")
+    timestamp: str = Field(..., description="Request timestamp")
+    status_code: int = Field(..., description="HTTP status code")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "endpoint": "/api/v1/chat",
+                "response_time_ms": 1523.45,
+                "timestamp": "2024-11-14T10:30:00Z",
+                "status_code": 200
+            }
+        }
+
+
+class HourlyRequestData(BaseModel):
+    """Model for hourly request rate data."""
+    hour: str = Field(..., description="Hour timestamp")
+    request_count: int = Field(..., ge=0, description="Number of requests in this hour")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "hour": "2024-11-14T10:00:00Z",
+                "request_count": 125
+            }
+        }
+
+
+class APIUsageMetrics(BaseModel):
+    """Response model for API usage metrics."""
+    total_requests: int = Field(..., ge=0, description="Total requests in time period")
+    success_count: int = Field(..., ge=0, description="Number of successful requests (2xx)")
+    error_count: int = Field(..., ge=0, description="Number of failed requests (4xx, 5xx)")
+    endpoints: List[APIEndpointMetric] = Field(
+        default_factory=list,
+        description="Metrics by endpoint"
+    )
+    slowest_requests: List[SlowestRequest] = Field(
+        default_factory=list,
+        description="Top 5 slowest requests"
+    )
+    hourly_rate: List[HourlyRequestData] = Field(
+        default_factory=list,
+        description="Request rate per hour"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_requests": 1523,
+                "success_count": 1450,
+                "error_count": 73,
+                "endpoints": [
+                    {
+                        "endpoint": "/api/v1/chat",
+                        "total_requests": 523,
+                        "success_count": 498,
+                        "error_count": 25,
+                        "avg_response_time_ms": 245.67
+                    }
+                ],
+                "slowest_requests": [
+                    {
+                        "endpoint": "/api/v1/chat",
+                        "response_time_ms": 1523.45,
+                        "timestamp": "2024-11-14T10:30:00Z",
+                        "status_code": 200
+                    }
+                ],
+                "hourly_rate": [
+                    {
+                        "hour": "2024-11-14T10:00:00Z",
+                        "request_count": 125
+                    }
+                ]
+            }
+        }
+
+
+class ErrorLogEntry(BaseModel):
+    """Model for error log entry."""
+    log_id: str = Field(..., description="Unique log entry identifier")
+    timestamp: str = Field(..., description="Error timestamp")
+    severity: str = Field(..., description="Error severity (INFO/WARNING/ERROR/CRITICAL)")
+    error_type: str = Field(..., description="Type of error")
+    error_message: str = Field(..., description="Error message")
+    endpoint: Optional[str] = Field(None, description="Affected endpoint")
+    stack_trace: Optional[str] = Field(None, description="Stack trace if available")
+    user_id: Optional[str] = Field(None, description="User ID if applicable")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "log_id": "507f1f77bcf86cd799439013",
+                "timestamp": "2024-11-14T10:30:00Z",
+                "severity": "ERROR",
+                "error_type": "DatabaseConnectionError",
+                "error_message": "Failed to connect to MongoDB",
+                "endpoint": "/api/v1/chat",
+                "stack_trace": "Traceback (most recent call last)...",
+                "user_id": "507f1f77bcf86cd799439011"
+            }
+        }
+
+
+class ErrorLogsResponse(BaseModel):
+    """Response model for error logs with pagination."""
+    logs: List[ErrorLogEntry] = Field(..., description="List of error log entries")
+    total: int = Field(..., ge=0, description="Total number of matching logs")
+    page: int = Field(..., ge=1, description="Current page number")
+    page_size: int = Field(..., ge=10, le=100, description="Records per page")
+    total_pages: int = Field(..., ge=0, description="Total number of pages")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "logs": [
+                    {
+                        "log_id": "507f1f77bcf86cd799439013",
+                        "timestamp": "2024-11-14T10:30:00Z",
+                        "severity": "ERROR",
+                        "error_type": "DatabaseConnectionError",
+                        "error_message": "Failed to connect to MongoDB",
+                        "endpoint": "/api/v1/chat",
+                        "stack_trace": "Traceback (most recent call last)...",
+                        "user_id": "507f1f77bcf86cd799439011"
+                    }
+                ],
+                "total": 25,
+                "page": 1,
+                "page_size": 50,
+                "total_pages": 1
+            }
+        }
+
+
+# Admin Analytics Schemas
+
+class DailyActiveUserData(BaseModel):
+    """Model for daily active user data point."""
+    date: str = Field(..., description="Date in YYYY-MM-DD format")
+    count: int = Field(..., ge=0, description="Number of active users on this date")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2024-11-14",
+                "count": 25
+            }
+        }
+
+
+class TopUser(BaseModel):
+    """Model for top active user."""
+    username: str = Field(..., description="Username")
+    query_count: int = Field(..., ge=0, description="Number of queries made")
+    last_activity: str = Field(..., description="Last activity timestamp")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "username": "john_doe",
+                "query_count": 150,
+                "last_activity": "2024-11-14T15:30:00"
+            }
+        }
+
+
+class UserEngagementMetrics(BaseModel):
+    """Response model for user engagement analytics."""
+    total_users: int = Field(..., ge=0, description="Total registered users")
+    active_users_30d: int = Field(..., ge=0, description="Users active in last 30 days")
+    avg_queries_per_user: float = Field(..., ge=0, description="Average queries per active user")
+    daily_active_users: List[DailyActiveUserData] = Field(
+        default_factory=list,
+        description="Daily active user counts for the period"
+    )
+    top_users: List[TopUser] = Field(
+        default_factory=list,
+        description="Top 10 most active users"
+    )
+    retention_rate_percent: float = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="User retention rate percentage"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_users": 500,
+                "active_users_30d": 125,
+                "avg_queries_per_user": 15.5,
+                "daily_active_users": [
+                    {
+                        "date": "2024-11-14",
+                        "count": 25
+                    }
+                ],
+                "top_users": [
+                    {
+                        "username": "john_doe",
+                        "query_count": 150,
+                        "last_activity": "2024-11-14T15:30:00"
+                    }
+                ],
+                "retention_rate_percent": 68.5
+            }
+        }
+
+
+class SessionDistribution(BaseModel):
+    """Model for session distribution by message count."""
+    range_1_5: int = Field(..., ge=0, description="Sessions with 1-5 messages", alias="1-5")
+    range_6_10: int = Field(..., ge=0, description="Sessions with 6-10 messages", alias="6-10")
+    range_11_20: int = Field(..., ge=0, description="Sessions with 11-20 messages", alias="11-20")
+    range_21_plus: int = Field(..., ge=0, description="Sessions with 21+ messages", alias="21+")
+
+    class Config:
+        populate_by_name = True
+        json_schema_extra = {
+            "example": {
+                "1-5": 45,
+                "6-10": 30,
+                "11-20": 20,
+                "21+": 5
+            }
+        }
+
+
+class QueryTopic(BaseModel):
+    """Model for query topic analysis."""
+    topic: str = Field(..., description="Topic keyword")
+    count: int = Field(..., ge=0, description="Frequency count")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "topic": "revenue",
+                "count": 85
+            }
+        }
+
+
+class SessionTrendData(BaseModel):
+    """Model for session trend data point."""
+    date: str = Field(..., description="Date in YYYY-MM-DD format")
+    count: int = Field(..., ge=0, description="Number of sessions created on this date")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2024-11-14",
+                "count": 12
+            }
+        }
+
+
+class SessionAnalytics(BaseModel):
+    """Response model for session analytics."""
+    total_sessions: int = Field(..., ge=0, description="Total number of sessions")
+    avg_session_duration_minutes: float = Field(
+        ...,
+        ge=0,
+        description="Average session duration in minutes"
+    )
+    avg_messages_per_session: float = Field(
+        ...,
+        ge=0,
+        description="Average messages per session"
+    )
+    session_distribution: Dict[str, int] = Field(
+        ...,
+        description="Distribution of sessions by message count ranges"
+    )
+    top_query_topics: List[QueryTopic] = Field(
+        default_factory=list,
+        description="Top 10 most common query topics"
+    )
+    session_trend: List[SessionTrendData] = Field(
+        default_factory=list,
+        description="Daily session creation trend"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_sessions": 250,
+                "avg_session_duration_minutes": 8.5,
+                "avg_messages_per_session": 6.2,
+                "session_distribution": {
+                    "1-5": 45,
+                    "6-10": 30,
+                    "11-20": 20,
+                    "21+": 5
+                },
+                "top_query_topics": [
+                    {
+                        "topic": "revenue",
+                        "count": 85
+                    },
+                    {
+                        "topic": "profit",
+                        "count": 72
+                    }
+                ],
+                "session_trend": [
+                    {
+                        "date": "2024-11-14",
+                        "count": 12
+                    }
+                ]
+            }
+        }
+
+
+class DocumentUsageAnalytics(BaseModel):
+    """Response model for document usage analytics."""
+    total_queries: int = Field(..., ge=0, description="Total document queries")
+    unique_documents_queried: int = Field(..., ge=0, description="Number of unique documents queried")
+    avg_queries_per_document: float = Field(..., ge=0, description="Average queries per document")
+    most_queried_documents: List[TopDocument] = Field(
+        default_factory=list,
+        description="Most queried documents"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_queries": 1523,
+                "unique_documents_queried": 45,
+                "avg_queries_per_document": 33.8,
+                "most_queried_documents": [
+                    {
+                        "document_id": "doc_123",
+                        "filename": "financial_report_q4.pdf",
+                        "query_count": 150,
+                        "last_queried": "2024-11-14T15:30:00"
+                    }
+                ]
+            }
+        }
+
+
+# Admin Configuration Management Schemas
+
+class ConfigSetting(BaseModel):
+    """Model representing a system configuration setting."""
+    setting_name: str = Field(..., description="Unique setting identifier")
+    value: Any = Field(..., description="Current value of the setting")
+    default_value: Any = Field(..., description="Default value of the setting")
+    data_type: str = Field(..., description="Data type (int, float, str, bool)")
+    description: str = Field(..., description="Description of the setting")
+    category: str = Field(..., description="Category (rag, document, api, llm, etc.)")
+    min_value: Optional[float] = Field(None, description="Minimum value constraint (for numeric types)")
+    max_value: Optional[float] = Field(None, description="Maximum value constraint (for numeric types)")
+    updated_at: Optional[str] = Field(None, description="Last update timestamp (ISO format)")
+    updated_by: Optional[str] = Field(None, description="Admin username who last updated")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "setting_name": "chunk_size",
+                "value": 800,
+                "default_value": 800,
+                "data_type": "int",
+                "description": "Size of text chunks in characters",
+                "category": "rag",
+                "min_value": 100,
+                "max_value": 2000,
+                "updated_at": "2024-11-14T10:30:00",
+                "updated_by": "admin_user"
+            }
+        }
+
+
+class ConfigSettingsListResponse(BaseModel):
+    """Response model for listing all configuration settings."""
+    settings: List[ConfigSetting] = Field(..., description="List of configuration settings")
+    total: int = Field(..., ge=0, description="Total number of settings")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "settings": [
+                    {
+                        "setting_name": "chunk_size",
+                        "value": 800,
+                        "default_value": 800,
+                        "data_type": "int",
+                        "description": "Size of text chunks in characters",
+                        "category": "rag",
+                        "min_value": 100,
+                        "max_value": 2000,
+                        "updated_at": "2024-11-14T10:30:00",
+                        "updated_by": "admin_user"
+                    }
+                ],
+                "total": 15
+            }
+        }
+
+
+class ConfigUpdateRequest(BaseModel):
+    """Request model for updating a configuration setting."""
+    value: Any = Field(..., description="New value for the setting")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "value": 1000
+            }
+        }
+
+
+class ConfigUpdateResponse(BaseModel):
+    """Response model for configuration update operation."""
+    message: str = Field(..., description="Success message")
+    setting: ConfigSetting = Field(..., description="Updated setting details")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Configuration setting updated successfully",
+                "setting": {
+                    "setting_name": "chunk_size",
+                    "value": 1000,
+                    "default_value": 800,
+                    "data_type": "int",
+                    "description": "Size of text chunks in characters",
+                    "category": "rag",
+                    "min_value": 100,
+                    "max_value": 2000,
+                    "updated_at": "2024-11-14T10:35:00",
+                    "updated_by": "admin_user"
+                }
             }
         }

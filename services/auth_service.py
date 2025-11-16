@@ -55,15 +55,54 @@ class AuthService:
             self.db = self.client[database_name]
             self.users_collection = self.db['users']
             
-            # Create unique index on username and email
-            self.users_collection.create_index("username", unique=True)
-            self.users_collection.create_index("email", unique=True)
+            # Create indexes for users collection
+            self._create_indexes()
             
             logger.info("AuthService initialized successfully")
             
         except Exception as e:
             logger.error(f"Error initializing AuthService: {e}")
             raise
+    
+    def _create_indexes(self):
+        """Create database indexes for better query performance."""
+        try:
+            from pymongo import ASCENDING, DESCENDING
+            
+            # Unique index on username
+            self.users_collection.create_index(
+                [("username", ASCENDING)],
+                unique=True
+            )
+            
+            # Unique index on email
+            self.users_collection.create_index(
+                [("email", ASCENDING)],
+                unique=True
+            )
+            
+            # Index on is_admin for filtering admin users
+            self.users_collection.create_index([("is_admin", ASCENDING)])
+            
+            # Index on created_at for sorting by registration date
+            self.users_collection.create_index([("created_at", DESCENDING)])
+            
+            # Index on last_login for sorting and filtering by activity
+            self.users_collection.create_index([("last_login", DESCENDING)])
+            
+            # Index on is_active for filtering active users
+            self.users_collection.create_index([("is_active", ASCENDING)])
+            
+            # Compound index for admin user queries with last login
+            self.users_collection.create_index([
+                ("is_admin", ASCENDING),
+                ("last_login", DESCENDING)
+            ])
+            
+            logger.info("AuthService indexes created successfully")
+            
+        except Exception as e:
+            logger.warning(f"Error creating AuthService indexes: {e}")
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """

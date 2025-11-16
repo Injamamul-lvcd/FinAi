@@ -17,6 +17,26 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 
+def _create_error_response(error_type: str, message: str, details: Optional[dict] = None) -> dict:
+    """
+    Create a consistent error response format.
+    
+    Args:
+        error_type: Type of error (e.g., "AuthenticationError")
+        message: Human-readable error message
+        details: Optional additional details
+        
+    Returns:
+        dict: Formatted error response
+    """
+    return {
+        "error": error_type,
+        "message": message,
+        "details": details,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
 async def get_current_admin(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security)
@@ -52,11 +72,11 @@ async def get_current_admin(
         logger.warning("Invalid token in admin authentication attempt")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error": "AuthenticationError",
-                "message": "Invalid authentication credentials",
-                "details": None
-            },
+            detail=_create_error_response(
+                "AuthenticationError",
+                "Invalid or expired authentication token",
+                {"reason": "token_invalid"}
+            ),
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -66,11 +86,11 @@ async def get_current_admin(
         logger.warning("Token missing username in admin authentication attempt")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error": "AuthenticationError",
-                "message": "Invalid authentication credentials",
-                "details": None
-            },
+            detail=_create_error_response(
+                "AuthenticationError",
+                "Invalid authentication credentials",
+                {"reason": "missing_username"}
+            ),
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -80,11 +100,11 @@ async def get_current_admin(
         logger.warning(f"User not found in admin authentication: {username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error": "AuthenticationError",
-                "message": "User not found",
-                "details": None
-            },
+            detail=_create_error_response(
+                "AuthenticationError",
+                "User not found",
+                {"reason": "user_not_found"}
+            ),
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -93,11 +113,11 @@ async def get_current_admin(
         logger.warning(f"Inactive user attempted admin access: {username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error": "AuthenticationError",
-                "message": "User account is inactive",
-                "details": None
-            },
+            detail=_create_error_response(
+                "AuthenticationError",
+                "User account is inactive",
+                {"reason": "account_inactive"}
+            ),
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -106,11 +126,11 @@ async def get_current_admin(
         logger.warning(f"Non-admin user attempted admin access: {username}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "error": "AuthorizationError",
-                "message": "Admin access required",
-                "details": None
-            }
+            detail=_create_error_response(
+                "AdminAuthorizationError",
+                "Admin access required",
+                {"reason": "insufficient_privileges", "required_role": "admin"}
+            )
         )
     
     # Add IP address to user info for logging
